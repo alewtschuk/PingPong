@@ -1,4 +1,4 @@
-## Project #: P1 PingPong
+## PingPong Simulation
 
 - Author: Alex Lewtschuk
 - Class: CS455 
