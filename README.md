@@ -1,8 +1,6 @@
 ## PingPong Simulation
 
 - Author: Alex Lewtschuk
-- Class: CS455 
-- Semester: Spring 2024
 
 ## Overview
 
