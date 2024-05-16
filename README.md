@@ -6,11 +6,11 @@
 
 ## Overview
 
-This PingPong project incorporates multithreading and socket connectios to make a server and client simulate a game of ping pong. When the client and server connect there is a distributed coin toss to decide who plays first. There is also a servent version in the Servernt directory.
+This PingPong project incorporates multithreading and socket connections to make a server and client simulate a game of ping pong. When the client and server connect there is a distributed coin toss to decide who plays first. There is also a servent version in the Servernt directory.
 
 ## Compiling and Using
 
-To run the code please use terminal and run the command `java pingpong.java <client|server> <serverHost> <port#>`. Make sure that the host is always `localhost`. 
+To run the code please use the terminal and run the command `java pingpong.java <client|server> <serverHost> <port#>`. Make sure that the host is always `localhost`. 
 
 Once the `server` has been set up open another terminal and with the same command specify `client` and the information for the server you just set up. This is how the `client` will connect.
 
