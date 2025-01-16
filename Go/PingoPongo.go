@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/signal"
 	"strconv"
 	"time"
 )
@@ -69,7 +70,6 @@ func startClient(host string, port string) {
 
 func distributedToss(encoder *gob.Encoder, decoder *gob.Decoder, ball Ball, mode string) PlayerAssignments {
 	var myRand int = rand.Intn(2)
-	fmt.Println("My random number: ", myRand)
 	encoder.Encode(myRand)
 
 	var thierNum int
@@ -82,7 +82,7 @@ func distributedToss(encoder *gob.Encoder, decoder *gob.Decoder, ball Ball, mode
 	fmt.Println("My number: ", myRand, "\n", "Their number: ", thierNum)
 	switch myRand == thierNum {
 	case true:
-		fmt.Println("Restult tied for client and server. Coin toss repeadting...")
+		fmt.Println("Restult tied for client and server. Coin toss repeating...")
 		return distributedToss(encoder, decoder, ball, mode)
 	case thierNum < myRand:
 		fmt.Println(mode + ": Coin toss terminated. I play as pong\n")
@@ -158,6 +158,7 @@ func handleConnection(serverConnection net.Conn, gameNum int) {
 		assignments = distributedToss(encoder, decoder, ball, mode)
 		var err = play(encoder, ball, assignments, mode)
 		if err != nil {
+			fmt.Println("Client has disconnected.")
 			fmt.Println("Server: Game " + strconv.Itoa(gameNum) + "\nGame Terminated.\nThanks for playing!")
 			break
 		}
@@ -173,6 +174,15 @@ func main() {
 	host = os.Args[2]
 	port = os.Args[3]
 	mode = os.Args[1]
+
+	exitChan := make(chan os.Signal, 1)
+	signal.Notify(exitChan, os.Interrupt)
+	go func() {
+		for range exitChan {
+			fmt.Println("\nProgram signalled to exit. Goodbye!")
+			os.Exit(0)
+		}
+	}()
 
 	if mode == "server" {
 		startServer(host, port)
