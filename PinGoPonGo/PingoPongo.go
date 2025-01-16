@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/gob"
-	"flag"
 	"fmt"
 	"math/rand"
 	"net"
@@ -13,169 +12,174 @@ import (
 
 const netType string = "tcp"
 
-type PingPong struct {
-	netType, host, port, address, flag string
-}
+// Global variables to hold the port and host
+var port string
+var host string
+var mode string
 
+// Empty ball struct to pass between client and server
 type Ball struct{}
 
+// Struct to hold the player assignments
 type PlayerAssignments struct {
-	playerAssignment, otherAssignment string
+	playerAssignment string
+	otherAssignment  string
 }
 
-func startClient(pingPongClient PingPong) {
-	fmt.Println("-----------Client Setup Begin-----------\nHost: " + pingPongClient.host + "\nPort: " + pingPongClient.port)
+// Method called on PlayerAssignments object to create filled PlayerAssignment Struct
+func newPlayerAssignment(playerAssignment string, otherAssignment string) *PlayerAssignments {
+	return &PlayerAssignments{
+		playerAssignment: playerAssignment,
+		otherAssignment:  otherAssignment,
+	}
+}
+
+func startClient(host string, port string) {
+	fmt.Println("-----------Client Setup Begin-----------\n" + "Host: " + host + "\nPort: " + port)
 	fmt.Println("Creating ball...")
-	ball := Ball{}
-	fmt.Println("Ball created...")
+	var ball Ball = Ball{}
+	fmt.Println("Ball created.")
 
-	//playerAssignment, otherAssignment := "",""
+	var assignments PlayerAssignments
 
-	serverConnection, err := net.Dial(pingPongClient.netType, pingPongClient.address)
+	conn, err := net.Dial(netType, net.JoinHostPort(host, port))
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Error in startClient()\nGame Terminated\nThanks for playing!")
-	}
-	defer serverConnection.Close() //Close connection when done
-
-	for true {
-		var assignments PlayerAssignments = distributedToss(serverConnection, ball, pingPongClient)
-		// playerAssignment, otherAssignment := assignments.playerAssignment, assignments.otherAssignment
-		play(serverConnection, ball, assignments, pingPongClient)
-	}
-}
-
-func distributedToss(serverConnection net.Conn, ball Ball, pingPongStruct PingPong) PlayerAssignments {
-	// var randNum int = rand.Int()
-	var myNum int = rand.Intn(2)
-	fmt.Println("My number is: " + strconv.Itoa(myNum))
-	serverConnection.Write([]byte(strconv.Itoa(myNum))) //Sends number result to other party
-
-	var buf []byte = make([]byte, 1) //Buffer to read from server
-	fmt.Println("Length of exampleSlice:", len(buf))
-	_, err := serverConnection.Read(buf) //Reads number result from other party
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Error in distributedToss()\nGame Terminated\nThanks for playing!")
-	}
-	theirNum := int(buf[0])
-	fmt.Println(pingPongStruct.flag + ": My result is: " + strconv.Itoa(myNum) + "\nTheir result is: " + strconv.Itoa(theirNum))
-
-	gob.Register(Ball{})                        // Register Ball type for encoding
-	encoder := gob.NewEncoder(serverConnection) // Create encoder
-
-	switch myNum > theirNum {
-	case true: //Play as ping case
-		fmt.Println(pingPongStruct.flag + ": Coin toss terminated. I play as ping\n")
-		encoder.Encode(ball) //Sends ball with result
-		fmt.Println(pingPongStruct.flag + " sent ping")
-		return PlayerAssignments{"ping", "pong"}
-	case false: //Play as pong case
-		fmt.Println(pingPongStruct.flag + ": Coin toss terminated. I play as pong\n")
-		encoder.Encode(ball) //Sends ball with result
-		fmt.Println(pingPongStruct.flag + " sent pong")
-		return PlayerAssignments{"pong", "ping"}
-	default: //Tied case, retoss coin
-		fmt.Println("Result tied for client and server. Coin toss repeating")
-		return distributedToss(serverConnection, ball, pingPongStruct)
-	}
-}
-
-func play(serverConnection net.Conn, ball Ball, assignments PlayerAssignments, pingPongStruct PingPong) {
-	gob.Register(Ball{})                        // Register Ball type for encoding
-	encoder := gob.NewEncoder(serverConnection) // Create encoder
-
-	for true {
-		fmt.Println(pingPongStruct.flag + " recieved: " + assignments.otherAssignment)
-		switch assignments.playerAssignment {
-		case "ping":
-			encoder.Encode(ball)
-			time.Sleep(2 * time.Second)
-			fmt.Println(pingPongStruct.flag + ": " + assignments.playerAssignment)
-		case "pong":
-			encoder.Encode(ball)
-			time.Sleep(2 * time.Second)
-			fmt.Println(pingPongStruct.flag + ": " + assignments.playerAssignment)
-		default:
-			fmt.Println("Error in play()\nGame Terminated\nThanks for playing!")
-		}
-	}
-}
-
-func startServer(pingPongServer PingPong) {
-	serverSocket, err := net.Listen(pingPongServer.netType, pingPongServer.address)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("Error in startServer()\nGame Terminated\nThanks for playing!")
+		fmt.Println("Error connecting to server in startClient()", err)
 		return
+	} else {
+		fmt.Println(mode + ": Connection established")
 	}
-	defer serverSocket.Close() // Close connection when done
-
-	gameNum := 0
+	defer conn.Close()
+	var encoder = gob.NewEncoder(conn)
+	var decoder = gob.NewDecoder(conn)
 
 	for {
-		serverConnection, err := serverSocket.Accept()
-		if err != nil {
-			fmt.Println(err)
-			fmt.Println("Error accepting client connection\nGame Terminated\nThanks for playing!")
-			continue
+		assignments = distributedToss(encoder, decoder, ball, mode)
+		if assignments.playerAssignment == "" || assignments.otherAssignment == "" {
+			fmt.Println("Error in distributedToss()")
+			os.Exit(1)
 		}
-		gameNum++
-		fmt.Println("Game " + strconv.Itoa(gameNum) + " started")
-
-		go run(serverConnection, pingPongServer, gameNum)
-		if run != 0 {
-
+		err = play(encoder, ball, assignments, mode)
+		if err != nil {
+			fmt.Println("Server has disconnected. Game Terminated.\nThanks for playing!")
+			os.Exit(0)
 		}
 	}
 }
 
-func run(serverConnection net.Conn, pingPongServer PingPong, gameNum int) int {
-	defer serverConnection.Close() // Ensure the connection is closed when done
-	fmt.Println("Running game", gameNum)
+func distributedToss(encoder *gob.Encoder, decoder *gob.Decoder, ball Ball, mode string) PlayerAssignments {
+	var myRand int = rand.Intn(2)
+	fmt.Println("My random number: ", myRand)
+	encoder.Encode(myRand)
 
-	var assignments PlayerAssignments = distributedToss(serverConnection, Ball{}, pingPongServer)
-	fmt.Println("Assignments for game", gameNum, ":", assignments)
+	var thierNum int
+	err := decoder.Decode(&thierNum)
 
-	play(serverConnection, Ball{}, assignments, pingPongServer)
-	fmt.Println("Game", gameNum, "finished")
-	return 1
+	if err != nil {
+		fmt.Println("Error decoding in distributedToss()", err)
+		os.Exit(1)
+	}
+	fmt.Println("My number: ", myRand, "\n", "Their number: ", thierNum)
+	switch myRand == thierNum {
+	case true:
+		fmt.Println("Restult tied for client and server. Coin toss repeadting...")
+		return distributedToss(encoder, decoder, ball, mode)
+	case thierNum < myRand:
+		fmt.Println(mode + ": Coin toss terminated. I play as pong\n")
+		encoder.Encode(ball)
+		fmt.Println(mode + " sent pong")
+		return *newPlayerAssignment("pong", "ping")
+	case thierNum > myRand:
+		fmt.Println(mode + ": Coin toss terminated. I play as ping\n")
+		encoder.Encode(ball)
+		fmt.Println(mode + " sent ping")
+		return *newPlayerAssignment("ping", "pong")
+	}
+	return *newPlayerAssignment("", "")
+}
+
+func play(encoder *gob.Encoder, ball Ball, assignments PlayerAssignments, mode string) error {
+	for {
+		fmt.Println(mode + " recieved: " + assignments.otherAssignment)
+		var err error
+		switch assignments.playerAssignment {
+		case "ping":
+			if err = encoder.Encode(ball); err != nil {
+				return err
+			}
+			time.Sleep(1 * time.Second)
+			fmt.Println(mode + ": " + assignments.playerAssignment)
+			break
+		case "pong":
+			if err = encoder.Encode(ball); err != nil {
+				return err
+			}
+			time.Sleep(1 * time.Second)
+			fmt.Println(mode + ": " + assignments.playerAssignment)
+		default:
+			fmt.Println("Error in play(). Invalid player assignment")
+			break
+		}
+	}
+}
+
+func startServer(host string, port string) {
+	fmt.Println("-----------Server Setup Begin-----------\n" + "Host: " + host + "\nPort: " + port)
+
+	var gameNum int = 1
+
+	server, err := net.Listen(netType, net.JoinHostPort(host, port))
+	if err != nil {
+		fmt.Println("Error starting server listener in startServer()", err)
+		os.Exit(1)
+	}
+	fmt.Println("Server: READY")
+
+	for {
+		serverConnection, err := server.Accept()
+		if err != nil {
+			fmt.Println("Error accepting server connection in startServer()", err)
+			os.Exit(1)
+		}
+		fmt.Println("Server: Connection accepted")
+		go handleConnection(serverConnection, gameNum)
+		gameNum++
+	}
+}
+
+func handleConnection(serverConnection net.Conn, gameNum int) {
+	fmt.Println("-----------Game " + strconv.Itoa(gameNum) + " Begin-----------")
+	defer serverConnection.Close()
+	var assignments PlayerAssignments
+	var ball Ball = Ball{}
+	var encoder = gob.NewEncoder(serverConnection)
+	var decoder = gob.NewDecoder(serverConnection)
+	for {
+		assignments = distributedToss(encoder, decoder, ball, mode)
+		var err = play(encoder, ball, assignments, mode)
+		if err != nil {
+			fmt.Println("Server: Game " + strconv.Itoa(gameNum) + "\nGame Terminated.\nThanks for playing!")
+			break
+		}
+	}
 }
 
 func main() {
-	client := flag.Bool("client", false, "Starts program in client mode")
-	server := flag.Bool("server", false, "Starts program in server mode")
-	serverHost := flag.String("host", "localhost", "Host to connect to")
-	serverPort := flag.Int("port", 8080, "Port to connect to")
-
-	flag.Parse()
-
-	if len(os.Args) == 0 {
-		fmt.Println("Usage: ./PingoPongo <-client|-server> <-host host> <-port port>")
+	if len(os.Args) < 4 {
+		fmt.Println("Usage:  go run PingPong.go <client|server> <serverHost> <port#>")
 		os.Exit(1)
 	}
 
-	if *client {
-		pingPongClient := PingPong{
-			netType: netType,
-			host:    *serverHost,
-			port:    strconv.Itoa(*serverPort),
-			address: *serverHost + ":" + strconv.Itoa(*serverPort),
-			flag:    "Client",
-		}
-		startClient(pingPongClient)
-	} else if *server {
-		//*serverHost = "localhost"
-		pingPongServer := PingPong{
-			netType: netType,
-			host:    *serverHost,
-			port:    strconv.Itoa(*serverPort),
-			address: *serverHost + ":" + strconv.Itoa(*serverPort),
-			flag:    "Server",
-		}
-		startServer(pingPongServer)
+	host = os.Args[2]
+	port = os.Args[3]
+	mode = os.Args[1]
+
+	if mode == "server" {
+		startServer(host, port)
+	} else if mode == "client" {
+		startClient(host, port)
 	} else {
-		fmt.Println("Valid input not detected\nUsage: ./PingoPongo <-client|-server> <-host host> <-port port>")
+		fmt.Println("Usage:  go run PingPong.go <client|server> <serverHost> <port#>")
 		os.Exit(1)
 	}
 }
