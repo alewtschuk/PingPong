@@ -1,4 +1,4 @@
-package Java.Servent;
+package PingPong.Servent;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

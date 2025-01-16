@@ -1,4 +1,4 @@
-package Java;
+package PingPong;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
