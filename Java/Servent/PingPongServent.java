@@ -1,4 +1,4 @@
-package hw1.Servent;
+package Java.Servent;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

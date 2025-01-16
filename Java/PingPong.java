@@ -1,4 +1,4 @@
-package hw1;
+package Java;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
